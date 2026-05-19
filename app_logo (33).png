@@ -1,0 +1,104 @@
+'use client';
+
+import React, { useState } from 'react';
+import AppLayout from '@/components/AppLayout';
+import { formatIndianCurrency } from '@/lib/formatters';
+
+
+interface AgingRow {
+  name: string;
+  bucket0_30: number;
+  bucket31_60: number;
+  bucket61_90: number;
+  bucket90plus: number;
+  total: number;
+}
+
+const mockReceivables: AgingRow[] = [
+  { name: 'Suresh Kumar & Sons', bucket0_30: 7000, bucket31_60: 0, bucket61_90: 0, bucket90plus: 12500, total: 19500 },
+  { name: 'Vijay Medical Store', bucket0_30: 3000, bucket31_60: 3200, bucket61_90: 0, bucket90plus: 0, total: 6200 },
+  { name: 'Priya Enterprises', bucket0_30: 1371, bucket31_60: 0, bucket61_90: 0, bucket90plus: 0, total: 1371 },
+  { name: 'Krishna Hardware', bucket0_30: 0, bucket31_60: 8750, bucket61_90: 0, bucket90plus: 0, total: 8750 },
+];
+
+const mockPayables: AgingRow[] = [
+  { name: 'Agro Traders Pvt Ltd', bucket0_30: 11490, bucket31_60: 15000, bucket61_90: 0, bucket90plus: 0, total: 26490 },
+  { name: 'National Foods Distributor', bucket0_30: 0, bucket31_60: 17140, bucket61_90: 0, bucket90plus: 0, total: 17140 },
+];
+
+function AgingTable({ rows, title, color }: { rows: AgingRow[]; title: string; color: string }) {
+  const totals = rows.reduce((acc, r) => ({
+    bucket0_30: acc.bucket0_30 + r.bucket0_30,
+    bucket31_60: acc.bucket31_60 + r.bucket31_60,
+    bucket61_90: acc.bucket61_90 + r.bucket61_90,
+    bucket90plus: acc.bucket90plus + r.bucket90plus,
+    total: acc.total + r.total,
+  }), { bucket0_30: 0, bucket31_60: 0, bucket61_90: 0, bucket90plus: 0, total: 0 });
+
+  return (
+    <div className="bg-card rounded-xl border shadow-card overflow-hidden">
+      <div className={`px-4 py-3 border-b ${color}`}>
+        <p className="text-sm font-700 text-foreground">{title}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40"><tr>
+            <th className="text-left px-4 py-3 text-xs font-600 text-muted-foreground">Name</th>
+            <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">0–30 days</th>
+            <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">31–60 days</th>
+            <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">61–90 days</th>
+            <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">90+ days</th>
+            <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">Total</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.name} className={`border-b last:border-b-0 ${i % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                <td className="px-4 py-3 text-xs font-500 text-foreground">{r.name}</td>
+                {[r.bucket0_30, r.bucket31_60, r.bucket61_90, r.bucket90plus].map((v, j) => (
+                  <td key={j} className={`px-4 py-3 text-right text-xs font-tabular ${v > 0 ? (j >= 2 ? 'text-danger font-700' : 'text-foreground') : 'text-muted-foreground'}`}>
+                    {v > 0 ? formatIndianCurrency(v) : '—'}
+                  </td>
+                ))}
+                <td className="px-4 py-3 text-right text-sm font-700 font-tabular">{formatIndianCurrency(r.total)}</td>
+              </tr>
+            ))}
+            <tr className="bg-muted/30 font-700 border-t">
+              <td className="px-4 py-3 text-sm font-800">TOTAL</td>
+              {[totals.bucket0_30, totals.bucket31_60, totals.bucket61_90, totals.bucket90plus].map((v, j) => (
+                <td key={j} className="px-4 py-3 text-right font-tabular text-sm">{formatIndianCurrency(v)}</td>
+              ))}
+              <td className="px-4 py-3 text-right font-tabular text-sm">{formatIndianCurrency(totals.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function ReceivablesPayablesPage() {
+  return (
+    <AppLayout>
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-700 text-foreground">Receivables / Payables</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Aging report for customer dues and supplier payables</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-xl border shadow-card p-4 border-l-4 border-l-danger">
+            <p className="text-xs font-600 text-muted-foreground uppercase tracking-wide mb-1">Total Receivables</p>
+            <p className="text-xl font-800 text-danger font-tabular">{formatIndianCurrency(mockReceivables.reduce((s, r) => s + r.total, 0))}</p>
+          </div>
+          <div className="bg-card rounded-xl border shadow-card p-4 border-l-4 border-l-warning">
+            <p className="text-xs font-600 text-muted-foreground uppercase tracking-wide mb-1">Total Payables</p>
+            <p className="text-xl font-800 text-warning font-tabular">{formatIndianCurrency(mockPayables.reduce((s, r) => s + r.total, 0))}</p>
+          </div>
+        </div>
+
+        <AgingTable rows={mockReceivables} title="Customer Receivables (Aging)" color="bg-danger/5" />
+        <AgingTable rows={mockPayables} title="Supplier Payables (Aging)" color="bg-warning/5" />
+      </div>
+    </AppLayout>
+  );
+}

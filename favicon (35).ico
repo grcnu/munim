@@ -1,0 +1,103 @@
+'use client';
+
+import React, { useState } from 'react';
+import AppLayout from '@/components/AppLayout';
+import { TrendingUp, Scale, Clock, BookOpen, BookMarked, Wallet, PieChart, ChevronRight } from 'lucide-react';
+import { formatIndianCurrency } from '@/lib/formatters';
+import { mockInvoices } from '@/lib/mockData';
+import Link from 'next/link';
+import Icon from '@/components/ui/AppIcon';
+
+
+const totalSales = mockInvoices.reduce((s, i) => s + i.grandTotalAfterDiscount, 0);
+const totalReceived = mockInvoices.reduce((s, i) => s + i.cashPaid + i.upiPaid + i.bankPaid, 0);
+const totalDue = mockInvoices.reduce((s, i) => s + i.balanceDue, 0);
+const totalGST = mockInvoices.reduce((s, i) => s + i.totalGST, 0);
+const cashBalance = 24350.00;
+const upiBalance = 12890.50;
+const bankBalance = 87420.75;
+
+interface ReportCardProps {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  href: string;
+  color: string;
+}
+
+function ReportCard({ icon: Icon, title, description, href, color }: ReportCardProps) {
+  return (
+    <Link href={href} className="bg-card rounded-xl border shadow-card p-4 flex items-start gap-3 hover:border-primary/40 transition-colors group">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+        <Icon size={18} className="text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-700 text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+    </Link>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <AppLayout>
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-700 text-foreground">Reports</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Business performance overview and detailed reports</p>
+        </div>
+
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Sales', value: formatIndianCurrency(totalSales), color: 'text-foreground' },
+            { label: 'Total Received', value: formatIndianCurrency(totalReceived), color: 'text-accent' },
+            { label: 'Customer Dues', value: formatIndianCurrency(totalDue), color: 'text-danger' },
+            { label: 'GST Collected', value: formatIndianCurrency(totalGST), color: 'text-primary' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-card rounded-xl border shadow-card p-4">
+              <p className="text-xs font-600 text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+              <p className={`text-xl font-800 font-tabular ${color}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Money Balances */}
+        <div>
+          <h2 className="text-sm font-700 text-muted-foreground uppercase tracking-wide mb-3">Account Balances</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Cash', value: cashBalance, color: 'bg-accent' },
+              { label: 'UPI', value: upiBalance, color: 'bg-primary' },
+              { label: 'Bank', value: bankBalance, color: 'bg-warning' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-card rounded-xl border shadow-card p-4">
+                <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center mb-2`}>
+                  <Wallet size={14} className="text-white" />
+                </div>
+                <p className="text-xs font-600 text-muted-foreground mb-1">{label} Balance</p>
+                <p className="text-lg font-800 text-foreground font-tabular">{formatIndianCurrency(value)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Report Links */}
+        <div>
+          <h2 className="text-sm font-700 text-muted-foreground uppercase tracking-wide mb-3">Detailed Reports</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ReportCard icon={PieChart} title="GST Summary" description="GST collected grouped by rate with date filtering" href="/gst-summary" color="bg-primary" />
+            <ReportCard icon={TrendingUp} title="Profit & Loss" description="Revenue, cost, expenses and net profit" href="/profit-loss" color="bg-accent" />
+            <ReportCard icon={Scale} title="Balance Sheet" description="Assets, liabilities and net worth" href="/balance-sheet" color="bg-warning" />
+            <ReportCard icon={Clock} title="Receivables / Payables" description="Customer and supplier aging report" href="/receivables-payables" color="bg-danger" />
+            <ReportCard icon={BookOpen} title="Customer Ledger" description="Transaction history with running balance per customer" href="/customer-ledger" color="bg-primary" />
+            <ReportCard icon={BookMarked} title="Supplier Ledger" description="Purchase and payment history per supplier" href="/supplier-ledger" color="bg-accent" />
+            <ReportCard icon={Wallet} title="Money Ledger" description="Cash, UPI and Bank transaction register" href="/money-ledger" color="bg-warning" />
+          </div>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}

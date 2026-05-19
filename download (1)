@@ -1,0 +1,124 @@
+-- Sales Invoice Management Schema
+-- Tables: customers, products, invoices, invoice_lines
+
+-- 1. Types
+DROP TYPE IF EXISTS public.payment_status CASCADE;
+CREATE TYPE public.payment_status AS ENUM ('Paid', 'Partial', 'Pending');
+
+DROP TYPE IF EXISTS public.gst_rate CASCADE;
+CREATE TYPE public.gst_rate AS ENUM ('0', '5', '12', '18', '28');
+
+-- 2. Core Tables
+
+CREATE TABLE IF NOT EXISTS public.customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  gstin TEXT NOT NULL DEFAULT '',
+  opening_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  qr TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  sale_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  purchase_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  gst_rate NUMERIC(5,2) NOT NULL DEFAULT 0,
+  default_discount NUMERIC(5,2) NOT NULL DEFAULT 0,
+  opening_stock NUMERIC(12,2) NOT NULL DEFAULT 0,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS public.invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  invoice_number TEXT NOT NULL,
+  date DATE NOT NULL,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+  customer_name TEXT NOT NULL DEFAULT 'Walk-in Customer',
+  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_gst NUMERIC(12,2) NOT NULL DEFAULT 0,
+  grand_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+  final_discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  grand_total_after_discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  cash_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+  upi_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+  bank_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+  balance_due NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status public.payment_status NOT NULL DEFAULT 'Pending'::public.payment_status,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS public.invoice_lines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id UUID NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL DEFAULT '',
+  product_name TEXT NOT NULL,
+  quantity NUMERIC(12,3) NOT NULL DEFAULT 1,
+  rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+  discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+  gst_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+  gross NUMERIC(12,2) NOT NULL DEFAULT 0,
+  discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  after_discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  taxable_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  gst_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  line_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Indexes
+CREATE INDEX IF NOT EXISTS idx_customers_user_id ON public.customers(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_user_id ON public.products(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_date ON public.invoices(date);
+CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices(customer_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_lines_invoice_id ON public.invoice_lines(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_lines_user_id ON public.invoice_lines(user_id);
+
+-- 4. Enable RLS
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoice_lines ENABLE ROW LEVEL SECURITY;
+
+-- 5. RLS Policies
+DROP POLICY IF EXISTS "users_manage_own_customers" ON public.customers;
+CREATE POLICY "users_manage_own_customers" ON public.customers
+FOR ALL TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "users_manage_own_products" ON public.products;
+CREATE POLICY "users_manage_own_products" ON public.products
+FOR ALL TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "users_manage_own_invoices" ON public.invoices;
+CREATE POLICY "users_manage_own_invoices" ON public.invoices
+FOR ALL TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "users_manage_own_invoice_lines" ON public.invoice_lines;
+CREATE POLICY "users_manage_own_invoice_lines" ON public.invoice_lines
+FOR ALL TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());

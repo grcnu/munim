@@ -1,0 +1,273 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import AppLayout from '@/components/AppLayout';
+import { Plus, Search, X, Trash2, RefreshCw } from 'lucide-react';
+import { formatIndianCurrency, formatDate, todayISO } from '@/lib/formatters';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import EmptyState from '@/components/ui/EmptyState';
+import { toast } from 'sonner';
+
+interface Supplier {
+  id: string;
+  name: string;
+}
+
+const mockSuppliers: Supplier[] = [
+  { id: 'sup-001', name: 'Agro Traders Pvt Ltd' },
+  { id: 'sup-002', name: 'National Foods Distributor' },
+  { id: 'sup-003', name: 'Sunrise FMCG Wholesale' },
+  { id: 'sup-004', name: 'Karnataka Oils & Fats' },
+];
+
+interface PurchaseBillLine {
+  billLineId: string;
+  productName: string;
+  originalQty: number;
+  returnQty: number;
+  purchaseRate: number;
+  gstPct: number;
+  lineTotal: number;
+}
+
+interface PurchaseReturn {
+  id: string;
+  returnNumber: string;
+  date: string;
+  billReference: string;
+  supplierName: string;
+  lines: PurchaseBillLine[];
+  totalAmount: number;
+  created_at: string;
+}
+
+const mockPurchaseReturns: PurchaseReturn[] = [
+  {
+    id: 'pr-001', returnNumber: 'PR-0001', date: '2026-05-16', billReference: 'PUR-0004', supplierName: 'Sunrise FMCG Wholesale',
+    lines: [{ billLineId: 'bl-002a', productName: 'Detergent Powder 1kg', originalQty: 200, returnQty: 10, purchaseRate: 62, gstPct: 18, lineTotal: Math.round(10 * 62 * 1.18 * 100) / 100 }],
+    totalAmount: Math.round(10 * 62 * 1.18 * 100) / 100, created_at: '2026-05-16T12:00:00Z',
+  },
+];
+
+interface ReturnFormProps {
+  onSave: (r: PurchaseReturn) => void;
+  onClose: () => void;
+  nextNumber: string;
+}
+
+function ReturnForm({ onSave, onClose, nextNumber }: ReturnFormProps) {
+  const [date, setDate] = useState(todayISO());
+  const [supplierId, setSupplierId] = useState('');
+  const [billReference, setBillReference] = useState('');
+  const [lines, setLines] = useState<PurchaseBillLine[]>([
+    { billLineId: `prl-${Date.now()}`, productName: '', originalQty: 0, returnQty: 0, purchaseRate: 0, gstPct: 5, lineTotal: 0 },
+  ]);
+
+  const updateLine = (id: string, field: keyof PurchaseBillLine, value: string | number) => {
+    setLines((prev) => prev.map((l) => {
+      if (l.billLineId !== id) return l;
+      const updated = { ...l, [field]: value };
+      updated.lineTotal = Math.round(updated.returnQty * updated.purchaseRate * (1 + updated.gstPct / 100) * 100) / 100;
+      return updated;
+    }));
+  };
+
+  const totalAmount = lines.reduce((s, l) => s + l.lineTotal, 0);
+  const supplier = mockSuppliers.find((s) => s.id === supplierId);
+
+  const handleSave = () => {
+    if (!supplierId) { toast.error('Select a supplier'); return; }
+    if (!billReference.trim()) { toast.error('Bill reference is required'); return; }
+    const activeLines = lines.filter((l) => l.returnQty > 0 && l.productName.trim());
+    if (activeLines.length === 0) { toast.error('Add at least one return item with quantity > 0'); return; }
+    onSave({
+      id: `pr-${Date.now()}`, returnNumber: nextNumber, date,
+      billReference, supplierName: supplier?.name ?? '',
+      lines: activeLines, totalAmount, created_at: new Date().toISOString(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-2xl border flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h2 className="text-base font-700 text-foreground">New Purchase Return — {nextNumber}</h2>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-muted transition-colors"><X size={16} /></button>
+        </div>
+        <div className="p-5 space-y-4 flex-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-600 text-muted-foreground mb-1">Date *</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-600 text-muted-foreground mb-1">Supplier *</label>
+              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                <option value="">Select supplier…</option>
+                {mockSuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-600 text-muted-foreground mb-1">Original Bill Reference *</label>
+            <input type="text" value={billReference} onChange={(e) => setBillReference(e.target.value)} placeholder="e.g. PUR-0004"
+              className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary font-mono" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-600 text-muted-foreground">Return Items *</label>
+              <button onClick={() => setLines((prev) => [...prev, { billLineId: `prl-${Date.now()}`, productName: '', originalQty: 0, returnQty: 0, purchaseRate: 0, gstPct: 5, lineTotal: 0 }])}
+                className="flex items-center gap-1 text-xs font-600 text-primary hover:underline"><Plus size={12} /> Add Item</button>
+            </div>
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/40"><tr>
+                  <th className="text-left px-3 py-2 font-600 text-muted-foreground">Product</th>
+                  <th className="text-right px-3 py-2 font-600 text-muted-foreground w-20">Return Qty</th>
+                  <th className="text-right px-3 py-2 font-600 text-muted-foreground w-24">Rate</th>
+                  <th className="text-right px-3 py-2 font-600 text-muted-foreground w-20">GST%</th>
+                  <th className="text-right px-3 py-2 font-600 text-muted-foreground w-28">Total</th>
+                  <th className="w-8"></th>
+                </tr></thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.billLineId} className="border-t">
+                      <td className="px-3 py-2"><input type="text" value={l.productName} onChange={(e) => updateLine(l.billLineId, 'productName', e.target.value)} placeholder="Product name" className="w-full text-xs border rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary" /></td>
+                      <td className="px-3 py-2"><input type="number" min={0} value={l.returnQty} onChange={(e) => updateLine(l.billLineId, 'returnQty', Number(e.target.value))} className="w-full text-xs border rounded px-2 py-1 text-right bg-background focus:outline-none focus:ring-1 focus:ring-primary" /></td>
+                      <td className="px-3 py-2"><input type="number" min={0} value={l.purchaseRate} onChange={(e) => updateLine(l.billLineId, 'purchaseRate', Number(e.target.value))} className="w-full text-xs border rounded px-2 py-1 text-right bg-background focus:outline-none focus:ring-1 focus:ring-primary" /></td>
+                      <td className="px-3 py-2">
+                        <select value={l.gstPct} onChange={(e) => updateLine(l.billLineId, 'gstPct', Number(e.target.value))} className="w-full text-xs border rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary">
+                          {[0, 5, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 text-right font-600 font-tabular">{l.lineTotal > 0 ? formatIndianCurrency(l.lineTotal) : '—'}</td>
+                      <td className="px-3 py-2"><button onClick={() => setLines((prev) => prev.filter((x) => x.billLineId !== l.billLineId))} className="p-1 hover:bg-red-50 rounded transition-colors"><X size={12} className="text-danger" /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalAmount > 0 && (
+              <div className="flex justify-end mt-3">
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total Return Amount</p>
+                  <p className="text-xl font-800 text-danger font-tabular">{formatIndianCurrency(totalAmount)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="bg-warning/10 border border-warning/30 rounded-lg px-3 py-2">
+            <p className="text-xs text-warning font-600">⚠ Purchase returns cannot be edited after saving. Delete and re-enter to correct.</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t bg-muted/20">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-600 border rounded-lg hover:bg-muted transition-colors">Cancel</button>
+          <button onClick={handleSave} className="px-4 py-2 text-sm font-600 bg-primary text-white rounded-lg hover:opacity-90 transition-all">Save Return</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PurchaseReturnPage() {
+  const [returns, setReturns] = useState<PurchaseReturn[]>(mockPurchaseReturns);
+  const [search, setSearch] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PurchaseReturn | null>(null);
+
+  const filtered = useMemo(() =>
+    returns.filter((r) => {
+      const q = search.toLowerCase();
+      return r.returnNumber.toLowerCase().includes(q) || r.supplierName.toLowerCase().includes(q) || r.billReference.toLowerCase().includes(q);
+    }), [returns, search]);
+
+  const nextNumber = `PR-${String(returns.length + 1).padStart(4, '0')}`;
+
+  const handleSave = (r: PurchaseReturn) => {
+    setReturns((prev) => [r, ...prev]);
+    toast.success(`${r.returnNumber} saved. Stock adjusted.`);
+    setFormOpen(false);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    setReturns((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+    toast.success(`${deleteTarget.returnNumber} deleted. Stock restored.`);
+    setDeleteTarget(null);
+  };
+
+  return (
+    <AppLayout>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-700 text-foreground">Purchase Returns</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} returns · Stock is removed on return</p>
+          </div>
+          <button onClick={() => setFormOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-600 bg-primary text-white rounded-lg hover:opacity-90 btn-press transition-all">
+            <Plus size={16} /> New Return
+          </button>
+        </div>
+
+        <div className="bg-card rounded-xl border shadow-card p-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input type="text" placeholder="Search return number, supplier, or bill reference…" value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
+            {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-muted rounded"><X size={12} className="text-muted-foreground" /></button>}
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border shadow-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="text-left px-4 py-3 text-xs font-600 text-muted-foreground">Return #</th>
+                  <th className="text-left px-4 py-3 text-xs font-600 text-muted-foreground">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-600 text-muted-foreground">Bill Ref</th>
+                  <th className="text-left px-4 py-3 text-xs font-600 text-muted-foreground">Supplier</th>
+                  <th className="text-center px-4 py-3 text-xs font-600 text-muted-foreground">Items</th>
+                  <th className="text-right px-4 py-3 text-xs font-600 text-muted-foreground">Return Amount</th>
+                  <th className="text-center px-4 py-3 text-xs font-600 text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={7}>
+                    <EmptyState icon={RefreshCw} title="No purchase returns" description="Record goods returned to suppliers from previous purchase bills."
+                      actionLabel="New Return" onAction={() => setFormOpen(true)} />
+                  </td></tr>
+                ) : filtered.map((r, i) => (
+                  <tr key={r.id} className={`border-b last:border-b-0 row-hover transition-colors group ${i % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                    <td className="px-4 py-3 font-700 text-primary text-xs font-mono">{r.returnNumber}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{r.billReference}</td>
+                    <td className="px-4 py-3 text-xs font-500 text-foreground">{r.supplierName}</td>
+                    <td className="px-4 py-3 text-center text-xs text-muted-foreground font-tabular">{r.lines.length}</td>
+                    <td className="px-4 py-3 text-right text-sm font-700 text-danger font-tabular">{formatIndianCurrency(r.totalAmount)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setDeleteTarget(r)} title="Delete" className="p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} className="text-danger" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {formOpen && <ReturnForm onSave={handleSave} onClose={() => setFormOpen(false)} nextNumber={nextNumber} />}
+
+        <ConfirmModal isOpen={!!deleteTarget} title="Delete Purchase Return"
+          message={`Delete ${deleteTarget?.returnNumber}? Stock will be restored. This cannot be undone.`}
+          confirmLabel="Delete" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+      </div>
+    </AppLayout>
+  );
+}
